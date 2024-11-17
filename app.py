@@ -18,24 +18,28 @@ st.write(f"""
  """)
 
 # @st.cache _data
-
-data = (
-    pl
-    .read_csv(url, separator="\t")
-    .select(
-        pl.col("freq,airpol,src_crf,unit,geo\\TIME_PERIOD").str.split(",").list.to_struct(fields=["freq", "airpol", "src_crf", "unit", "geo"]).alias("combined_info"),
-        pl.col("*").exclude("freq,airpol,src_crf,unit,geo\\TIME_PERIOD")
-    ).unnest("combined_info")
-    .unpivot(index=["freq", "airpol", "src_crf", "unit", "geo"], 
-            value_name="emissions", 
-            variable_name="year")
-    .with_columns(
-        year = pl.col("year").str.replace(" ", "").cast(pl.Int64),
-        emissions = pl.col("emissions").str.strip_chars_end(" bep").cast(pl.Float64, strict=True)
+@st.cache_data
+def load_data():
+    data = (
+        pl
+        .read_csv(url, separator="\t")
+        .select(
+            pl.col("freq,airpol,src_crf,unit,geo\\TIME_PERIOD").str.split(",").list.to_struct(fields=["freq", "airpol", "src_crf", "unit", "geo"]).alias("combined_info"),
+            pl.col("*").exclude("freq,airpol,src_crf,unit,geo\\TIME_PERIOD")
+        ).unnest("combined_info")
+        .unpivot(index=["freq", "airpol", "src_crf", "unit", "geo"], 
+                value_name="emissions", 
+                variable_name="year")
+        .with_columns(
+            year = pl.col("year").str.replace(" ", "").cast(pl.Int64),
+            emissions = pl.col("emissions").str.strip_chars_end(" bep").cast(pl.Float64, strict=True)
+        )
+        .pivot(on="unit", values="emissions")
+        .filter(pl.col("src_crf") == "TOTXMEMONIA")
     )
-    .pivot(on="unit", values="emissions")
-    .filter(pl.col("src_crf") == "TOTXMEMONIA")
-)
+    return data
+
+data = load_data()
 
 st.write("""
 ## Quali sono gli stati più inquinati in un dato anno?
